@@ -12,3 +12,6 @@
     * Baseline_3_v1.cu: Cài đặt tuần tự thuật toán Radix Sort với k = 1 bit
     * Baseline_3_v2.cu: Cài đặt song song thuật toán Radix Sort với k = 1 bit (song song phần exclusive scan được mảng inScan)
     * Baseline_3_v3.cu: Cài đặt song song thuật toán Radix Sort với k = 1 bit
+    * Baseline_4_v1.cu: Cài đặt tuần tự thuật toán Radix Sort
+    * Baseline_4_v2.cu: Cài đặt tuần tự thuật toán Radix Sort (song song hóa phần tính localHost)
+    * Baseline_4_v3.cu: Cài đặt tuần tự thuật toán Radix Sort (song song hóa phần tính localHost,exclusive scan)
