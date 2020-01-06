@@ -89,66 +89,66 @@ __global__ void addBlkKernel(int * in, int n, int * blkSums)
     if(i<n&&blockIdx.x>0)
         in[i]+=blkSums[blockIdx.x-1];
 }
+
 __global__ void scanBlkKernel(int * in, int n, int * out, int * blkSums)
 {   
-    // TODO
-    extern __shared__ int s_in[];
-    int i=blockDim.x*blockIdx.x+threadIdx.x;
-    
-    // gán giá trị tương ứng vào smem
-    if(i<n)
-        s_in[threadIdx.x]=in[i];
-    else
-        s_in[threadIdx.x]=0;
-    __syncthreads();
-
-    // cộng các giá cách nhau stride bước lại với nhau
-    for(int stride=1;stride<blockDim.x;stride*=2)
-    {
-        int temp=0;
-        if(threadIdx.x>=stride)
-        {
-            temp=s_in[threadIdx.x-stride];// lấy phần tử trước đó stride bước
-        }
-        __syncthreads();// chắc chắn giá trị năm trước stride bước đã được lấy vào bộ nhớ thanh ghi
-        if(threadIdx.x>=stride )
-        {
-            s_in[threadIdx.x]+=temp;
-        }
-        __syncthreads();// chắc chắn các giá trị đã được cộng xong
+    extern __shared__ int value[];
+    int i = blockIdx.x * blockDim.x + threadIdx.x;
+    if (i < n) {
+        value[threadIdx.x] = in[i];
     }
 
-    // gán giá trị tương ứng vào mảng out
-    if(i<n)
-        out[i]=s_in[threadIdx.x];
-
-    // thread cuối cùng trong block ghi giá trị vào blkSums theo blockIdx
-    if(blkSums!=NULL)
-    {
-        if(threadIdx.x==blockDim.x-1)
-        {
-            blkSums[blockIdx.x]=s_in[threadIdx.x];
-        }
+    for (unsigned int stride = 1; stride <= threadIdx.x; stride *= 2) {
+        __syncthreads();
+        int tmp;
+        if (threadIdx.x < n - stride)
+            tmp = value[threadIdx.x-stride];
+        else
+            tmp = 0;
+        __syncthreads();
+        value[threadIdx.x] += tmp;
+    }
+    
+    blkSums[blockIdx.x] = value[blockDim.x - 1];
+    if (i<n) {
+        out[i]=value[threadIdx.x];
     }
 }
+
+
+__global__ void addSumScan(int * out, int n, int * blkSums)
+{   
+    int i = blockIdx.x * blockDim.x + threadIdx.x;
+    if (i < n && blockIdx.x > 0) 
+    {
+        out[i] = out[i] + blkSums[blockIdx.x - 1];
+    }
+}
+
+
+
 void sortByDevice(const uint32_t * in, int n, 
     uint32_t * out, 
     int nBits, int  blockSize)
 {
     int nBins = 1 << nBits; // số bin
     int m=(n - 1) / blockSize + 1;// gridSize
-    dim3 blockSize1(blockSize);
-    dim3 gridSize1((n - 1) / blockSize1.x + 1);
-    dim3 gridSize2((nBins*m - 1) / blockSize + 1);
+    dim3 blockSizeHist(blockSize);
+    dim3 blockSizeScan(blockSize);
+
+    dim3 gridSizeHist((n - 1) / blockSizeHist.x + 1);
+    dim3 gridSizeScan((nBins*m - 1) / blockSizeScan.x + 1);
     // cấp phát
    
     // scan
-    int *d_scan,*d_blkSums,*d_histScan;
-    int * histScan = (int *)malloc(m*nBins * sizeof(int));
-    int* blkSums = (int *)malloc(gridSize2.x*sizeof(int));
+    int *d_scan, *d_blkSums, *d_histScan, *d_blkOuts;
+    int *histScan = (int *)malloc(m*nBins * sizeof(int));
+    int *blkSums = (int *)malloc(m*nBins*sizeof(int));
 
     CHECK(cudaMalloc(&d_scan, nBins*m * sizeof(int)));
-    CHECK(cudaMalloc(&d_blkSums,gridSize2.x*sizeof(int)));
+    CHECK(cudaMalloc(&d_blkSums,gridSizeScan.x*sizeof(int)));
+    CHECK(cudaMalloc(&d_blkOuts,m*nBins*sizeof(int)));
+
     CHECK(cudaMalloc(&d_histScan,m*nBins*sizeof(int)));
     // chỉ số bắt đầu
     int **start = (int **)malloc(m * sizeof(int *)); 
@@ -164,14 +164,38 @@ void sortByDevice(const uint32_t * in, int n,
     memcpy(src, in, n * sizeof(uint32_t));
     uint32_t * originalSrc = src; // Use originalSrc to free memory later
     uint32_t * dst = out;
+    // CHECK(cudaMemcpy(d_in, src, n * sizeof(int), cudaMemcpyHostToDevice));
 
     for (int bit = 0;  bit < sizeof(uint32_t) * 8; bit += nBits)
     {
         CHECK(cudaMemcpy(d_in, src, n * sizeof(int), cudaMemcpyHostToDevice));
         // Tính local hist bỏ vào d_scan
-        computeLocalHist<<<gridSize1, blockSize1, blockSize*sizeof(int)>>>(d_in, n, d_scan, nBins,bit);
+        computeLocalHist<<<gridSizeHist, blockSizeHist, blockSize*sizeof(int)>>>(d_in, n, d_scan, nBins,bit);
+       
         // // Tính exclusive scan bỏ vào d_histscan
-        // scanBlkKernel<<<gridSize2,blockSize1,blockSize*sizeof(int)>>>(d_scan,m*nBins,d_histScan,d_blkSums);
+        scanBlkKernel<<<gridSizeScan,blockSizeScan,blockSize*sizeof(int)>>>(d_scan,m*nBins,d_histScan,d_blkSums);
+        size_t bytes = gridSizeScan.x * sizeof(int);
+        int * in_tmp = (int *)malloc(bytes);
+        int * out_tmp = (int *)malloc(bytes);
+
+        CHECK(cudaMemcpy(in_tmp, d_blkSums, gridSizeScan.x * sizeof(int), cudaMemcpyDeviceToHost));
+        out_tmp[0] = in_tmp[0];
+	    for (int i = 1; i < gridSizeScan.x; i++)
+	    {
+	    	out_tmp[i] = out_tmp[i - 1] + in_tmp[i];
+	    }
+
+		CHECK(cudaMemcpy(d_blkOuts, out_tmp, gridSizeScan.x * sizeof(int), cudaMemcpyHostToDevice));
+        addSumScan<<<gridSizeScan,blockSizeScan>>>(d_histScan, n, d_blkOuts);
+
+    	cudaDeviceSynchronize();
+		CHECK(cudaGetLastError());
+
+        histScan[0] = 0;
+		CHECK(cudaMemcpy(histScan + 1, d_histScan, (nBins*m - 1) * sizeof(int), cudaMemcpyDeviceToHost));
+    
+
+
         // CHECK(cudaMemcpy(histScan,d_histScan,nBins*m*sizeof(int),cudaMemcpyDeviceToHost));
         // CHECK(cudaMemcpy(blkSums,d_blkSums,gridSize2.x*sizeof(int),cudaMemcpyDeviceToHost));
         // for(int i=1;i<gridSize1.x;i++)
@@ -182,12 +206,21 @@ void sortByDevice(const uint32_t * in, int n,
         // addBlkKernel<<<gridSize1,blockSize1>>>(d_histScan,nBins,d_blkSums);
         // CHECK(cudaMemcpy(&histScan[1],d_histScan,(m*nBins-1)*sizeof(int),cudaMemcpyDeviceToHost));
 
-        uint32_t *scan=(uint32_t*) malloc(nBins*m*sizeof(uint32_t));
-        CHECK(cudaMemcpy(scan,d_scan,nBins*m*sizeof(uint32_t),cudaMemcpyDeviceToHost));
-        histScan[0]=0;
-        for(int i=1;i<nBins*m;i++)
-            histScan[i]=histScan[i-1]+scan[i-1];
-
+        // uint32_t *scan=(uint32_t*) malloc(nBins*m*sizeof(uint32_t));
+        // CHECK(cudaMemcpy(scan,d_scan,nBins*m*sizeof(uint32_t),cudaMemcpyDeviceToHost));
+        // histScan[0]=0;
+        // for(int i=1;i<nBins*m;i++)
+        //     histScan[i]=histScan[i-1]+scan[i-1];
+//         printf("%d\n", histScan[1]);
+// 25
+// 27
+// 38
+// 22
+// 29
+// 29
+// 35
+// 64
+        
         
         // sắp xếp cục bộ
         for(int blockIdx=0;blockIdx<m;blockIdx++)
@@ -261,7 +294,7 @@ void sortByDevice(const uint32_t * in, int n,
     memcpy(out, src, n * sizeof(uint32_t));
     // Free memories
     cudaFree(d_scan);
-    cudaFree(d_blkSums);
+    // cudaFree(d_blkSums);
     cudaFree(d_histScan);
     for (int i=0; i<m; i++)
     {
