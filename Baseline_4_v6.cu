@@ -226,7 +226,7 @@ void sortByDevice(const uint32_t * in, int n,
     long * d_histScan;
     long *histScan = (long *)malloc(m*nBins * sizeof(long));
     int *blkSums = (int *)malloc(m*nBins*sizeof(int));
-
+    int* starts1D=(int *) malloc(m*nBins*sizeof(int));
     CHECK(cudaMalloc(&d_scan, nBins*m * sizeof(int)));
     CHECK(cudaMalloc(&d_blkSums,gridSizeScan.x*sizeof(int)));
     CHECK(cudaMalloc(&d_blkOuts,m*nBins*sizeof(int)));
@@ -247,6 +247,9 @@ void sortByDevice(const uint32_t * in, int n,
     memcpy(src, in, n * sizeof(uint32_t));
     uint32_t * originalSrc = src; // Use originalSrc to free memory later
     uint32_t * dst = out;
+    size_t bytes = gridSizeScan.x * sizeof(int);
+    int * in_tmp = (int *)malloc(bytes);
+    int * out_tmp = (int *)malloc(bytes);
     // CHECK(cudaMemcpy(d_in, src, n * sizeof(int), cudaMemcpyHostToDevice));
 
     for (int bit = 0;  bit < sizeof(uint32_t) * 8; bit += nBits)
@@ -257,9 +260,7 @@ void sortByDevice(const uint32_t * in, int n,
        
         // // Tính exclusive scan bỏ vào d_histscan
         scanBlkKernel<<<gridSizeScan,blockSizeScan,blockSize*sizeof(int)>>>(d_scan,m*nBins,d_histScan,d_blkSums);
-        size_t bytes = gridSizeScan.x * sizeof(int);
-        int * in_tmp = (int *)malloc(bytes);
-        int * out_tmp = (int *)malloc(bytes);
+        
 
         CHECK(cudaMemcpy(in_tmp, d_blkSums, gridSizeScan.x * sizeof(int), cudaMemcpyDeviceToHost));
         out_tmp[0] = in_tmp[0];
@@ -305,7 +306,6 @@ void sortByDevice(const uint32_t * in, int n,
 
         radixSort1bit<<<gridSizeHist,blockSizeHist,blockSize*sizeof(uint32_t)>>>(d_in,n,d_out,nBits,bit,nBins,d_histScan,d_starts);
         CHECK(cudaMemcpy(src,d_in,n*sizeof(uint32_t),cudaMemcpyDeviceToHost));
-        int* starts1D=(int *) malloc(m*nBins*sizeof(int));
         CHECK(cudaMemcpy(starts1D,d_starts,m*nBins*sizeof(uint32_t),cudaMemcpyDeviceToHost));
         // for(int i=0;i<16;i++)
         // printf("%d ",starts1D[16*2+i]);
@@ -383,6 +383,9 @@ void sortByDevice(const uint32_t * in, int n,
         free(start[i]);
     }
     free(start); 
+    free(histScan); 
+    free(blkSums); 
+    free(starts1D);
     free(originalSrc);
 }
 // Radix sort
