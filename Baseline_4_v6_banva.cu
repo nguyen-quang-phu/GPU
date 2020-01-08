@@ -328,8 +328,8 @@ void sortByDevice(const uint32_t * in, int n,
         // }
 
         radixSort1bit<<<gridSizeHist,blockSizeHist,blockSize*sizeof(uint32_t)>>>(d_in,n,d_out,nBits,bit,nBins, d_starts);
-        CHECK(cudaMemcpy(src,d_in,n*sizeof(uint32_t),cudaMemcpyDeviceToHost));
-        CHECK(cudaMemcpy(starts1D,d_starts,m*nBins*sizeof(uint32_t),cudaMemcpyDeviceToHost));
+        // CHECK(cudaMemcpy(src,d_in,n*sizeof(uint32_t),cudaMemcpyDeviceToHost));
+        // CHECK(cudaMemcpy(starts1D,d_starts,m*nBins*sizeof(uint32_t),cudaMemcpyDeviceToHost));
 
         // CHECK(cudaMemcpy(dst,d_out,n*sizeof(uint32_t),cudaMemcpyDeviceToHost));
 
@@ -468,7 +468,7 @@ int main(int argc, char ** argv)
 
     // SET UP INPUT SIZE
     int n = (1 << 24) + 1;
-    // n = 600000;
+    // n = 500000;
     printf("\nInput size: %d\n", n);
 
     // ALLOCATE MEMORIES
