@@ -97,10 +97,15 @@ void sortByDevice(const uint32_t * in, int n,
     uint32_t * dst = out;
 
 
-
+    GpuTimer timerTmp1,timerTmp2,timerTmp3,timerTmp4,timerTmp5; 
+    float time1,time2,time3,time4,time5;
+    time1=time2=time3=time4=time5=0;
 
     for (int bit = 0;  bit < sizeof(uint32_t) * 8; bit += nBits)
     {
+
+        timerTmp1.Start();
+
         // gán localHist=0
         for (int i=0; i<m; i++)
         {
@@ -120,6 +125,10 @@ void sortByDevice(const uint32_t * in, int n,
                 }
             }
         }
+
+        timerTmp1.Stop();
+        time1 = time1 + timerTmp1.Elapsed();
+        timerTmp2.Start();
 
         // cấp phát scan=0
         for (int i=0; i<m; i++)
@@ -150,7 +159,11 @@ void sortByDevice(const uint32_t * in, int n,
             }
         }
 
-        
+        timerTmp2.Stop();
+        time2 = time2 + timerTmp2.Elapsed();
+        timerTmp3.Start();
+
+
         // sắp xếp cục bộ
         for(int blockIdx=0;blockIdx<m;blockIdx++)
         {
@@ -172,6 +185,9 @@ void sortByDevice(const uint32_t * in, int n,
                 }
             }
         }
+        timerTmp3.Stop();
+        time3 = time3 + timerTmp3.Elapsed();
+        timerTmp4.Start();
 
         // cấp phát start=-1
         for (int i=0; i<m; i++)
@@ -202,6 +218,11 @@ void sortByDevice(const uint32_t * in, int n,
             }
         }
 
+        timerTmp4.Stop();
+        time4 = time4 + timerTmp4.Elapsed();
+        timerTmp5.Start();
+
+
         //scatter
         for(int blockIdx=0;blockIdx<m;blockIdx++)
         {
@@ -216,10 +237,23 @@ void sortByDevice(const uint32_t * in, int n,
                 }
             }
         }
+
+        timerTmp5.Stop();
+        time5 = time5 + timerTmp5.Elapsed();
+
+
+
         uint32_t * temp = src;
         src = dst;
         dst = temp; 
     }
+
+    printf("Time (local hist): %.3f ms\n", time1);
+    printf("Time (exclusive scan): %.3f ms\n", time2);
+    printf("Time (local sort): %.3f ms\n", time3);
+    printf("Time (start value): %.3f ms\n", time4);
+    printf("Time (scatter): %.3f ms\n", time5);
+
     memcpy(out, src, n * sizeof(uint32_t));
     // Free memories
     for (int i=0; i<m; i++)
@@ -307,7 +341,7 @@ int main(int argc, char ** argv)
 
     // SET UP INPUT SIZE
     int n = (1 << 24) + 1;
-    n = 600000;
+    n = 1000000;
     printf("\nInput size: %d\n", n);
 
     // ALLOCATE MEMORIES
@@ -333,7 +367,7 @@ int main(int argc, char ** argv)
     {
         blockSizes = atoi(argv[2]);
     }
-    printf("\block size: %d", blockSizes);
+    printf("\nBlock size: %d", blockSizes);
 
     // SORT BY HOST
     sort(in, n, correctOut, nBits);

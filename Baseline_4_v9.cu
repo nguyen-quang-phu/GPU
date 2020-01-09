@@ -267,11 +267,20 @@ void sortByDevice(const uint32_t * in, int n,
     uint32_t * out_tmp = (uint32_t*)malloc(bytes);
     CHECK(cudaMemcpy(d_in, src, n * sizeof(uint32_t), cudaMemcpyHostToDevice));
 
+    GpuTimer timerTmp1,timerTmp2,timerTmp3,timerTmp4,timerTmp5; 
+    float time1,time2,time3,time4,time5;
+    time1=time2=time3=time4=time5=0;
+
+
     for (int bit = 0;  bit < sizeof(uint32_t) * 8; bit += nBits)
     {
         // Tính local hist bỏ vào d_scan
+        timerTmp1.Start();
         computeLocalHist<<<gridSize, blockSize, blockSizes*sizeof(uint32_t)>>>(d_in, n, d_scan, nBins,bit);
-       
+        timerTmp1.Stop();
+        time1 = time1 + timerTmp1.Elapsed();
+        timerTmp2.Start(); 
+
         // // Tính exclusive scan bỏ vào d_histscan
         scanBlkKernel<<<gridSizeScan,blockSizeScan,blockSizes*sizeof(uint32_t)>>>(d_scan,m*nBins,d_histScan,d_blkSums);
         CHECK(cudaMemcpy(in_tmp, d_blkSums, gridSizeScan.x * sizeof(uint32_t), cudaMemcpyDeviceToHost));
@@ -284,17 +293,34 @@ void sortByDevice(const uint32_t * in, int n,
         addSumScan<<<gridSizeScan,blockSizeScan>>>(d_histScan, n, d_blkOuts);
     	cudaDeviceSynchronize();
 		CHECK(cudaGetLastError());
-        
+
+        timerTmp2.Stop();
+        time2 = time2 + timerTmp2.Elapsed();
+        timerTmp3.Start();
+
         // Radix Sort 1 bit
         radixSort1bit<<<gridSize,blockSize,blockSizes*sizeof(uint32_t)>>>(d_in,n,d_out,nBits,bit,nBins, d_starts);
-        
+
+        timerTmp3.Stop();
+        time3 = time3 + timerTmp3.Elapsed();
+        timerTmp5.Start();
+
         // Scatter
         scatter<<<gridSize,blockSize,blockSizes*sizeof(uint32_t)>>>(d_in,n,d_out,nBits,bit,nBins,d_starts,d_histScan);
+
+        timerTmp5.Stop();
+        time5 = time5 + timerTmp5.Elapsed();
 
         d_tmp = d_in;
         d_in = d_out;
         d_out = d_tmp;
     }
+    printf("Time (local hist): %.3f ms\n", time1);
+    printf("Time (exclusive scan): %.3f ms\n", time2);
+    printf("Time (local sort) + Time (start value): %.3f ms\n", time3);
+    printf("Time (scatter): %.3f ms\n", time5);
+
+    
     CHECK(cudaMemcpy(src, d_in, n * sizeof(uint32_t), cudaMemcpyDeviceToHost));
     memcpy(out, src, n * sizeof(uint32_t));
     // Free memories
@@ -373,7 +399,7 @@ int main(int argc, char ** argv)
 
     // SET UP INPUT SIZE
     int n = (1 << 24) + 1;
-    // n = 10;
+    n = 1000000;
     printf("\nInput size: %d\n", n);
 
     // ALLOCATE MEMORIES
@@ -399,7 +425,7 @@ int main(int argc, char ** argv)
     {
         blockSizes = atoi(argv[2]);
     }
-    printf("\block size: %d", blockSizes);
+    printf("\nblock size: %d", blockSizes);
 
     // SORT BY HOST
     sort(in, n, correctOut, nBits);

@@ -146,7 +146,7 @@ void sort(const uint32_t * in, int n,
     }
     else // use device
     {
-    	printf("\nRadix sort by device\n");
+    	printf("\nRadix sort by thrust\n");
         sortByDevice(in, n, out, nBits, blockSizes);
     }
 
@@ -197,7 +197,7 @@ int main(int argc, char ** argv)
 
     // SET UP INPUT SIZE
     int n = (1 << 24) + 1;
-    //n = 10;
+    n = 1000000;
     printf("\nInput size: %d\n", n);
 
     // ALLOCATE MEMORIES

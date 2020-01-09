@@ -165,6 +165,10 @@ void sortByDevice(const uint32_t * in, int n,
     uint32_t * originalSrc = src; // Use originalSrc to free memory later
     uint32_t * dst = out;
 
+    GpuTimer timerTmp1,timerTmp2,timerTmp3,timerTmp4,timerTmp5; 
+    float time1,time2,time3,time4,time5;
+    time1=time2=time3=time4=time5=0;
+
     for (int bit = 0;  bit < sizeof(uint32_t) * 8; bit += nBits)
     {
         CHECK(cudaMemcpy(d_in, src, n * sizeof(int), cudaMemcpyHostToDevice));
