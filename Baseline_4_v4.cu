@@ -275,6 +275,9 @@ void sortByDevice(const uint32_t * in, int n,
             d_out=d_temp;        
         }
         CHECK(cudaMemcpy(src,d_in,n*sizeof(uint32_t),cudaMemcpyDeviceToHost));
+        for(int i=0;i<50;i++)
+        printf("%d ",src[i]);
+        printf("\n\n\n");
         // tính chỉ số bắt đầu
         for(int blockIdx=0;blockIdx<m;blockIdx++)
         {

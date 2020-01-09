@@ -108,11 +108,12 @@ __global__ void scanBlkKernel(int * in, int n, int * out, int * blkSums)
         out[i]=value[threadIdx.x];
     }
 }
-__global__ void radixSort1bit(uint32_t * in, int n, uint32_t * out,int nBits, int bit,int nBins)
+__global__ void radixSort1bit(uint32_t * in, int n, uint32_t * out,int nBits, int bit,int nBins,int*histScan)
 {   int i = blockIdx.x * blockDim.x + threadIdx.x;
+    extern __shared__ uint32_t value[];
+    __shared__ uint32_t start[16];
     for(int indexbit=0;indexbit<nBits;indexbit++)
     {
-        extern __shared__ uint32_t value[];
         
         if (i < n) 
         {
@@ -171,7 +172,42 @@ __global__ void radixSort1bit(uint32_t * in, int n, uint32_t * out,int nBits, in
             in=out;
             out=tam;
     }
-    
+    if (i<n)
+        {
+            if(threadIdx.x==0)
+            {
+                start[((in[i] >> bit) & (nBins - 1))]=threadIdx.x;
+            }
+            else
+            {
+                if(((in[i] >> bit) & (nBins - 1))!=((in[i-1] >> bit) & (nBins - 1)))
+                {
+                    start[((in[i] >> bit) & (nBins - 1))]=threadIdx.x;
+                }
+            }
+        }
+    // if(i<n)
+    // {
+    //     int bin = (in[i] >> bit) & (nBins - 1);
+    //     int rank=0;
+    //     if(blockIdx.x==0)
+    //     {
+    //         if(bin==0) 
+    //         {
+    //             rank=threadIdx.x-start[bin];
+    //         }
+    //         else
+    //         {
+    //             rank=histScan[bin*gridDim.x+blockIdx.x-1]+threadIdx.x-start[bin];
+    //         }     
+    //     }
+    //     else
+    //     {
+    //         rank=histScan[bin*gridDim.x+blockIdx.x-1]+threadIdx.x-start[bin];
+    //     }
+    //     out[rank]=in[i];
+    // }
+
 }
 
 __global__ void addSumScan(int * out, int n, int * blkSums)
@@ -275,48 +311,50 @@ void sortByDevice(const uint32_t * in, int n,
         //     }
         // }
 
-        radixSort1bit<<<gridSizeHist,blockSizeHist,blockSize*sizeof(uint32_t)>>>(d_in,n,d_out,nBits,bit,nBins);
-        CHECK(cudaMemcpy(src,d_in,n*sizeof(uint32_t),cudaMemcpyDeviceToHost));
-        for(int i=0;i<50;i++)
-        printf("%d ",src[i]);
-        printf("\n\n\n");
+        radixSort1bit<<<gridSizeHist,blockSizeHist,blockSize*sizeof(uint32_t)>>>(d_in,n,d_out,nBits,bit,nBins,d_histScan);
+        CHECK(cudaMemcpy(dst,d_out,n*sizeof(uint32_t),cudaMemcpyDeviceToHost));
 
-        // tính chỉ số bắt đầu
-        for(int blockIdx=0;blockIdx<m;blockIdx++)
-        {
-            for(int threadIdx=0;threadIdx<blockSize;threadIdx++)
-            {
-                int i=blockIdx*blockSize+threadIdx;
-                if (i<n)
-                {
-                    if(threadIdx==0)
-                    {
-                        start[blockIdx][((src[i] >> bit) & (nBins - 1))]=threadIdx;
-                    }
-                    else
-                    {
-                        if(((src[i] >> bit) & (nBins - 1))!=((src[i-1] >> bit) & (nBins - 1)))
-                        {
-                            start[blockIdx][((src[i] >> bit) & (nBins - 1))]=threadIdx;
-                        }
-                    }
-                }
-            }
-        }
-        //scatter
-        for(int blockIdx=0;blockIdx<m;blockIdx++)
-        {
-            for(int threadIdx=0;threadIdx<blockSize;threadIdx++)
-            {
-                int i=blockIdx*blockSize+threadIdx;
-                if(i<n)
-                {
-                    int bin = (src[i] >> bit) & (nBins - 1);
-                    int rank=histScan[bin*m+blockIdx]+threadIdx-start[blockIdx][bin];
-                    dst[rank]=src[i];
-                }
-            }
-        }
+        // // tính chỉ số bắt đầu
+        // for(int blockIdx=0;blockIdx<m;blockIdx++)
+        // {
+        //     for(int threadIdx=0;threadIdx<blockSize;threadIdx++)
+        //     {
+        //         int i=blockIdx*blockSize+threadIdx;
+        //         if (i<n)
+        //         {
+        //             if(threadIdx==0)
+        //             {
+        //                 start[blockIdx][((src[i] >> bit) & (nBins - 1))]=threadIdx;
+        //             }
+        //             else
+        //             {
+        //                 if(((src[i] >> bit) & (nBins - 1))!=((src[i-1] >> bit) & (nBins - 1)))
+        //                 {
+        //                     start[blockIdx][((src[i] >> bit) & (nBins - 1))]=threadIdx;
+        //                 }
+        //             }
+        //         }
+        //     }
+        // }
+
+        // //scatter
+        // for(int blockIdx=0;blockIdx<m;blockIdx++)
+        // {
+        //     for(int threadIdx=0;threadIdx<blockSize;threadIdx++)
+        //     {
+        //         int i=blockIdx*blockSize+threadIdx;
+        //         if(i<n)
+        //         {
+        //             int bin = (src[i] >> bit) & (nBins - 1);
+        //             int rank=histScan[bin*m+blockIdx]+threadIdx-start[blockIdx][bin];
+        //             dst[rank]=src[i];
+        //             if(blockIdx==0)
+        //             printf("%d ",dst[rank]);
+
+        //         }
+        //     }
+        // }
+
         uint32_t * temp = src;
         src = dst;
         dst = temp; 

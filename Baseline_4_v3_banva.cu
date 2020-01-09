@@ -83,12 +83,6 @@ __global__ void computeLocalHist(uint32_t * in, int n, int * scan, int nBins, in
             scan[(threadIdx.x+stride)*gridDim.x+blockIdx.x]=s_hist[threadIdx.x+stride];
             // hist[nBins*blockIdx.x+threadIdx.x+stride]=s_hist[threadIdx.x+stride];
 }
-__global__ void addBlkKernel(int * in, int n, int * blkSums)
-{
-    int i=blockDim.x*blockIdx.x+threadIdx.x;
-    if(i<n&&blockIdx.x>0)
-        in[i]+=blkSums[blockIdx.x-1];
-}
 
 __global__ void scanBlkKernel(int * in, int n, int * out, int * blkSums)
 {   
@@ -193,34 +187,8 @@ void sortByDevice(const uint32_t * in, int n,
 
         histScan[0] = 0;
 		CHECK(cudaMemcpy(histScan + 1, d_histScan, (nBins*m - 1) * sizeof(int), cudaMemcpyDeviceToHost));
-    
-
-
-        // CHECK(cudaMemcpy(histScan,d_histScan,nBins*m*sizeof(int),cudaMemcpyDeviceToHost));
-        // CHECK(cudaMemcpy(blkSums,d_blkSums,gridSize2.x*sizeof(int),cudaMemcpyDeviceToHost));
-        // for(int i=1;i<gridSize1.x;i++)
-        // {
-        //     blkSums[i]+=blkSums[i-1];
-        // }
-        // CHECK(cudaMemcpy(d_blkSums,blkSums,gridSize2.x*sizeof(int),cudaMemcpyHostToDevice));
-        // addBlkKernel<<<gridSize1,blockSize1>>>(d_histScan,nBins,d_blkSums);
-        // CHECK(cudaMemcpy(&histScan[1],d_histScan,(m*nBins-1)*sizeof(int),cudaMemcpyDeviceToHost));
-
-        // uint32_t *scan=(uint32_t*) malloc(nBins*m*sizeof(uint32_t));
-        // CHECK(cudaMemcpy(scan,d_scan,nBins*m*sizeof(uint32_t),cudaMemcpyDeviceToHost));
-        // histScan[0]=0;
-        // for(int i=1;i<nBins*m;i++)
-        //     histScan[i]=histScan[i-1]+scan[i-1];
-//         printf("%d\n", histScan[1]);
-// 25
-// 27
-// 38
-// 22
-// 29
-// 29
-// 35
-// 64
-        
+        for(int i=0;i<nBins*m;i++)
+        printf("%i ",histScan[i]);
         
         // sắp xếp cục bộ
         for(int blockIdx=0;blockIdx<m;blockIdx++)

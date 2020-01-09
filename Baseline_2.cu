@@ -265,7 +265,8 @@ void sortByDevice(const uint32_t * in, int n,
         // TODO: Scan "hist" (exclusively) and save the result to "histScan"
 
         int* blkSums = (int *)malloc(gridSize2.x*sizeof(int));
-        scanBlkKernel<<<gridSize2,blockSize2,gridSize2.x>>>(d_hist,nBins,d_histScan,d_blkSums);
+        
+        scanBlkKernel<<<gridSize2,blockSize2,blockSize2.x*sizeof(int)>>>(d_hist,nBins,d_histScan,d_blkSums);
 
         // bắt lỗi hàm kernel
         errSync  = cudaGetLastError();
@@ -287,7 +288,7 @@ void sortByDevice(const uint32_t * in, int n,
             blkSums[i]+=blkSums[i-1];
         }
         CHECK(cudaMemcpy(d_blkSums,blkSums,gridSize2.x*sizeof(int),cudaMemcpyHostToDevice));
-        addBlkKernel<<<gridSize2,blockSize2>>>(histScan,nBins,d_blkSums);
+        addBlkKernel<<<gridSize2,blockSize2>>>(d_histScan,nBins,d_blkSums);
         // bắt lỗi hàm kernel
         errSync  = cudaGetLastError();
         errAsync = cudaDeviceSynchronize();

@@ -169,19 +169,24 @@ void sortByDevice(const uint32_t * in, int n,
     {
         CHECK(cudaMemcpy(d_in, src, n * sizeof(int), cudaMemcpyHostToDevice));
         // Tính local hist bỏ vào d_scan
-        computeLocalHist<<<gridSize1, blockSize1, nBins*sizeof(int)>>>(d_in, n, d_scan, nBins,bit);
-        // Tính exclusive scan bỏ vào d_histscan
-        scanBlkKernel<<<gridSize2,blockSize1,blockSize*sizeof(int)>>>(d_scan,m*nBins,d_histScan,d_blkSums);
-        CHECK(cudaMemcpy(histScan,d_histScan,nBins*m*sizeof(int),cudaMemcpyDeviceToHost));
-        CHECK(cudaMemcpy(blkSums,d_blkSums,gridSize2.x*sizeof(int),cudaMemcpyDeviceToHost));
-        for(int i=1;i<gridSize1.x;i++)
-        {
-            blkSums[i]+=blkSums[i-1];
-        }
-        CHECK(cudaMemcpy(d_blkSums,blkSums,gridSize2.x*sizeof(int),cudaMemcpyHostToDevice));
-        addBlkKernel<<<gridSize1,blockSize1>>>(d_histScan,nBins,d_blkSums);
-        CHECK(cudaMemcpy(&histScan[1],d_histScan,(m*nBins-1)*sizeof(int),cudaMemcpyDeviceToHost));
+        computeLocalHist<<<gridSize1, blockSize1, blockSize*sizeof(int)>>>(d_in, n, d_scan, nBins,bit);
+        // // Tính exclusive scan bỏ vào d_histscan
+        // scanBlkKernel<<<gridSize2,blockSize1,blockSize*sizeof(int)>>>(d_scan,m*nBins,d_histScan,d_blkSums);
+        // CHECK(cudaMemcpy(histScan,d_histScan,nBins*m*sizeof(int),cudaMemcpyDeviceToHost));
+        // CHECK(cudaMemcpy(blkSums,d_blkSums,gridSize2.x*sizeof(int),cudaMemcpyDeviceToHost));
+        // for(int i=1;i<gridSize1.x;i++)
+        // {
+        //     blkSums[i]+=blkSums[i-1];
+        // }
+        // CHECK(cudaMemcpy(d_blkSums,blkSums,gridSize2.x*sizeof(int),cudaMemcpyHostToDevice));
+        // addBlkKernel<<<gridSize1,blockSize1>>>(d_histScan,nBins,d_blkSums);
+        // CHECK(cudaMemcpy(&histScan[1],d_histScan,(m*nBins-1)*sizeof(int),cudaMemcpyDeviceToHost));
+
+        uint32_t *scan=(uint32_t*) malloc(nBins*m*sizeof(uint32_t));
+        CHECK(cudaMemcpy(scan,d_scan,nBins*m*sizeof(uint32_t),cudaMemcpyDeviceToHost));
         histScan[0]=0;
+        for(int i=1;i<nBins*m;i++)
+            histScan[i]=histScan[i-1]+scan[i-1];
 
         
         // sắp xếp cục bộ
@@ -332,7 +337,7 @@ int main(int argc, char ** argv)
 
     // SET UP INPUT SIZE
     int n = (1 << 24) + 1;
-    n = 2048+1;
+    n = 600000;
     printf("\nInput size: %d\n", n);
 
     // ALLOCATE MEMORIES
