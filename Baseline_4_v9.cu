@@ -399,7 +399,7 @@ int main(int argc, char ** argv)
 
     // SET UP INPUT SIZE
     int n = (1 << 24) + 1;
-    n = 1000000;
+    // n = 1000000;
     printf("\nInput size: %d\n", n);
 
     // ALLOCATE MEMORIES
@@ -429,11 +429,11 @@ int main(int argc, char ** argv)
 
     // SORT BY HOST
     sort(in, n, correctOut, nBits);
-    printArray(correctOut, n);
+    // printArray(correctOut, n);
     
     // SORT BY DEVICE
     sort(in, n, out, nBits, true, blockSizes);
-    printArray(out,n);
+    // printArray(out,n);
     checkCorrectness(out, correctOut, n);
     
     // FREE MEMORIES 
