@@ -91,7 +91,7 @@ __global__ void scanBlkKernel(int * in, int n, int * out, int * blkSums)
     if (i < n) {
         value[threadIdx.x] = in[i];
     }
-    
+
     for (unsigned int stride = 1; stride <= threadIdx.x; stride *= 2) {
         __syncthreads();
         int tmp;
@@ -102,7 +102,7 @@ __global__ void scanBlkKernel(int * in, int n, int * out, int * blkSums)
         __syncthreads();
         value[threadIdx.x] += tmp;
     }
-    
+
     blkSums[blockIdx.x] = value[blockDim.x - 1];
     if (i<n) {
         if(threadIdx.x==0) out[i]=0;
@@ -120,7 +120,7 @@ __global__ void radixSort1bit(uint32_t * in, int n, uint32_t * out,int nBits, in
 
     for(int indexbit=0;indexbit<nBits;indexbit++)
     {
-        
+
         if (i < n) 
         {
             value[threadIdx.x] = ((((in[i] >> bit) & (nBins - 1)) >> indexbit) & 1);
@@ -192,7 +192,7 @@ __global__ void radixSort1bit(uint32_t * in, int n, uint32_t * out,int nBits, in
                 starts[blockIdx.x*nBins+((in[i] >> bit) & (nBins - 1))]=start[((in[i] >> bit) & (nBins - 1))];
             }
         }
-        
+
     }    
     // if(i<n)
     // {
@@ -203,7 +203,7 @@ __global__ void radixSort1bit(uint32_t * in, int n, uint32_t * out,int nBits, in
     //         // printf("%d\n",rank);
     //     out[rank] = in[i];
     //     // }
-        
+
     // }  
 
 }
@@ -211,7 +211,7 @@ __global__ void radixSort1bit(uint32_t * in, int n, uint32_t * out,int nBits, in
 
 __global__ void scatter(uint32_t * in, int n, uint32_t * out,int nBits, int bit,int nBins, int* start, int* histScan)
 {
-    
+
     int i = blockIdx.x * blockDim.x + threadIdx.x;
     if(i < n)
     {
@@ -246,7 +246,7 @@ void sortByDevice(const uint32_t * in, int n,
     dim3 gridSizeHist((n - 1) / blockSizeHist.x + 1);
     dim3 gridSizeScan((nBins*m - 1) / blockSizeScan.x + 1);
     // cấp phát
-   
+
     // scan
     int *d_scan, *d_blkSums, *d_histScan, *d_blkOuts, *d_starts;
     int *histScan = (int *)malloc(m*nBins * sizeof(int));
@@ -283,7 +283,7 @@ void sortByDevice(const uint32_t * in, int n,
         CHECK(cudaMemcpy(d_in, src, n * sizeof(uint32_t), cudaMemcpyHostToDevice));
         // Tính local hist bỏ vào d_scan
         computeLocalHist<<<gridSizeHist, blockSizeHist, blockSize*sizeof(int)>>>(d_in, n, d_scan, nBins,bit);
-       
+
         // // Tính exclusive scan bỏ vào d_histscan
         scanBlkKernel<<<gridSizeScan,blockSizeScan,blockSize*sizeof(int)>>>(d_scan,m*nBins,d_histScan,d_blkSums);
         CHECK(cudaMemcpy(in_tmp, d_blkSums, gridSizeScan.x * sizeof(int), cudaMemcpyDeviceToHost));
@@ -416,16 +416,16 @@ int main(int argc, char ** argv)
     // SORT BY HOST
     sort(in, n, correctOut, nBits);
     // printArray(correctOut, n);
-    
+
     // SORT BY DEVICE
     sort(in, n, out, nBits, true, blockSizes);
     // printArray(out,n);
     checkCorrectness(out, correctOut, n);
-    
+
     // FREE MEMORIES 
     free(in);
     free(out);
     free(correctOut);
-    
+
     return EXIT_SUCCESS;
 }
